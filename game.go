@@ -1,11 +1,15 @@
 package main
 
 import (
-	"image/color"
+	"bytes"
+	"log"
 
 	"github.com/KidPudel/noodle_go/entities"
+	raudio "github.com/KidPudel/noodle_go/resources"
 	"github.com/KidPudel/noodle_go/util"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
 )
 
 type Game struct {
@@ -14,30 +18,45 @@ type Game struct {
 	VerticalGridLine   *ebiten.Image
 	HorizontalGridLine *ebiten.Image
 
-	Score int
+	Score     int
+	GameTheme *audio.Player
 }
 
 func InitGame() *Game {
 	noodle := entities.CreateNoodle()
 	flour := entities.SpawnFlour()
-	vertical := ebiten.NewImage(util.NoodleHeadSize/10, util.ScreenHeight)
-	horizontal := ebiten.NewImage(util.ScreenWidth, util.NoodleHeadSize/10)
-	game := &Game{Noodle: noodle, Flour: flour, VerticalGridLine: vertical, HorizontalGridLine: horizontal}
+	vertical := ebiten.NewImage(util.NoodleHeadSize/15, util.ScreenHeight)
+	horizontal := ebiten.NewImage(util.ScreenWidth, util.NoodleHeadSize/15)
+	audioContext := audio.NewContext(44100)
+	stream, err := wav.DecodeWithoutResampling(bytes.NewReader(raudio.GameTheme))
+	if err != nil {
+		log.Fatal(err)
+	}
+	player, err := audioContext.NewPlayer(stream)
+	if err != nil {
+		log.Fatal(err)
+	}
+	player.Play()
+	game := &Game{Noodle: noodle, Flour: flour, VerticalGridLine: vertical, HorizontalGridLine: horizontal, GameTheme: player}
 	return game
 }
 
 // game's loop basic functionality
 
 func (g *Game) Update() error {
-	g.Noodle.Update(g.Score)
+	if !g.GameTheme.IsPlaying() {
+		g.GameTheme.Rewind()
+		g.GameTheme.Play()
+	}
+	g.Noodle.Update(&g.Score)
 	g.Flour.Update(g.Noodle.Pos, &g.Score)
 
 	return nil
 }
 
 func (g *Game) DrawGrid(screen *ebiten.Image) {
-	g.VerticalGridLine.Fill(color.RGBA{211, 193, 191, 255})
-	g.HorizontalGridLine.Fill(color.RGBA{211, 193, 191, 255})
+	g.VerticalGridLine.Fill(util.GridColor)
+	g.HorizontalGridLine.Fill(util.GridColor)
 	for i := range util.ScreenWidth / util.NoodleHeadSize {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(float64(util.NoodleHeadSize*i), 0)
@@ -51,7 +70,7 @@ func (g *Game) DrawGrid(screen *ebiten.Image) {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{254, 230, 228, 255})
+	screen.Fill(util.BackgroundColor)
 	g.DrawGrid(screen)
 	g.Flour.Draw(screen)
 	g.Noodle.Draw(screen)
